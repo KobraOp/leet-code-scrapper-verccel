@@ -1,14 +1,16 @@
-from flask import Flask,render_template
+from flask import Flask, request, jsonify, render_template
 import telebot
 
+# Telegram Bot Token
 BOT_TOKEN = "7702535826:AAEvM1ADAyZkhiVPkLppJmdblp0GfwQaGK0"
 bot = telebot.TeleBot(BOT_TOKEN)
 
-user_id = "Admin"
-password = "Admin"
+# Static credentials
+USER_ID = "Admin"
+PASSWORD = "Admin"
 
+# Store authenticated users
 users = set()
-
 pending_user = {}
 
 app = Flask(__name__)
@@ -16,6 +18,14 @@ app = Flask(__name__)
 @app.route('/')
 def home():
     return render_template('index.html')
+
+@app.route(f"/{BOT_TOKEN}", methods=["POST"])
+def telegram_webhook():
+    """Handles incoming Telegram updates."""
+    update = request.get_json()
+    if update:
+        bot.process_new_updates([telebot.types.Update.de_json(update)])
+    return jsonify({"status": "ok"}), 200
 
 @bot.message_handler(commands=["start"])
 def start(message):
@@ -38,25 +48,26 @@ def handle_authentication(message):
         user_data["step"] = "ask_password"
     
     elif user_data.get("step") == "ask_password":
-        user_id = user_data.get("user_id")
-        password = message.text
+        entered_user_id = user_data.get("user_id")
+        entered_password = message.text
 
         # Validate credentials
-        if user_id == user_id and password == password:
+        if entered_user_id == USER_ID and entered_password == PASSWORD:
             users.add(chat_id)
             bot.send_message(chat_id, "✅ Login successful! Your chat ID is saved.")
         else:
             bot.send_message(chat_id, "❌ Incorrect credentials. Try again.")
 
-        pending_user.pop(chat_id, None)  # Remove user from pending list
+        pending_user.pop(chat_id, None)
 
 @bot.message_handler(commands=["users"])
 def list_users(message):
-    """Admin command to list all authenticated users"""
+    """Admin command to list authenticated users"""
     chat_id = message.chat.id
     if chat_id in users:
         bot.send_message(chat_id, f"Authenticated users:\n{users}")
     else:
         bot.send_message(chat_id, "❌ You are not authorized to view this.")
 
-bot.polling()
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
